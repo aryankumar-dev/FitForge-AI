@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
 import {
   Dumbbell,
@@ -51,7 +54,25 @@ const FEATURES = [
   },
 ];
 
-export default function LandingPage() {
+
+  export default function LandingPage() {
+  useEffect(() => {
+    const checkBackend = async () => {
+      try {
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/health`
+        );
+
+        const data = await res.json();
+        console.log("✅ Backend Response:", data);
+      } catch (err) {
+        console.error("❌ Backend Error:", err);
+      }
+    };
+
+    checkBackend();
+  }, []);
+
   return (
     <div className="flex min-h-screen flex-col">
       <Navbar />
