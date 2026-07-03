@@ -60,7 +60,7 @@ const FEATURES = [
     const checkBackend = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/health`
+          `${process.env.NEXT_PUBLIC_API_URL}/health`
         );
 
         const data = await res.json();
