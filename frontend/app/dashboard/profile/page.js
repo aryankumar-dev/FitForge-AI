@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Save } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Loader2, Save, Upload, X } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   Select,
   SelectContent,
@@ -21,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import api from "@/lib/api";
+import api, { mediaUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 
@@ -31,6 +32,10 @@ export default function ProfilePage() {
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const photoInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -58,6 +63,85 @@ export default function ProfilePage() {
   }, []);
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));
+
+  const handlePhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    setUploadingPhoto(true);
+    try {
+      const data = new FormData();
+      data.append("photo", file);
+      const res = await api.post("/users/profile/photo", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const updated = res.data?.user || res.data;
+      setForm((f) => ({ ...f, profilePicture: updated.profilePicture }));
+      updateUser(updated);
+      toast({ title: "Profile picture updated", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Upload failed",
+        description: err.response?.data?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  const handleGalleryChange = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = "";
+    if (!files.length) return;
+
+    const existingCount = form.gallery?.length || 0;
+    if (existingCount + files.length > 5) {
+      toast({
+        title: "Too many photos",
+        description: `You can have at most 5 gallery photos (you have ${existingCount}).`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setUploadingGallery(true);
+    try {
+      const data = new FormData();
+      files.forEach((file) => data.append("photos", file));
+      const res = await api.post("/users/profile/gallery", data, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const updated = res.data?.user || res.data;
+      setForm((f) => ({ ...f, gallery: updated.gallery }));
+      updateUser(updated);
+      toast({ title: "Gallery updated", variant: "success" });
+    } catch (err) {
+      toast({
+        title: "Upload failed",
+        description: err.response?.data?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    } finally {
+      setUploadingGallery(false);
+    }
+  };
+
+  const handleDeleteGalleryPhoto = async (photoUrl) => {
+    try {
+      const res = await api.delete("/users/profile/gallery", { data: { photoUrl } });
+      const updated = res.data?.user || res.data;
+      setForm((f) => ({ ...f, gallery: updated.gallery }));
+      updateUser(updated);
+    } catch (err) {
+      toast({
+        title: "Could not remove photo",
+        description: err.response?.data?.message || "Something went wrong",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -122,6 +206,39 @@ export default function ProfilePage() {
       </CardHeader>
       <form onSubmit={handleSubmit}>
         <CardContent className="space-y-6">
+          <div className="flex items-center gap-4 rounded-xl border p-4">
+            <Avatar className="h-16 w-16">
+              <AvatarImage src={mediaUrl(form.profilePicture)} alt={form.name} />
+              <AvatarFallback className="text-lg">
+                {form.name?.[0]?.toUpperCase() || "U"}
+              </AvatarFallback>
+            </Avatar>
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Profile Picture</p>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={uploadingPhoto}
+                onClick={() => photoInputRef.current?.click()}
+              >
+                {uploadingPhoto ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                {uploadingPhoto ? "Uploading..." : "Change Photo"}
+              </Button>
+            </div>
+          </div>
+
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
@@ -298,6 +415,54 @@ export default function ProfilePage() {
                     onChange={(e) => update("bio", e.target.value)}
                   />
                 </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label>Gallery ({form.gallery?.length || 0}/5)</Label>
+                  <input
+                    ref={galleryInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleGalleryChange}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingGallery || (form.gallery?.length || 0) >= 5}
+                    onClick={() => galleryInputRef.current?.click()}
+                  >
+                    {uploadingGallery ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Upload className="mr-2 h-4 w-4" />
+                    )}
+                    {uploadingGallery ? "Uploading..." : "Add Photos"}
+                  </Button>
+                </div>
+                {form.gallery?.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+                    {form.gallery.map((photo, i) => (
+                      <div key={i} className="relative aspect-square overflow-hidden rounded-lg border">
+                        <img
+                          src={mediaUrl(photo)}
+                          alt={`Gallery ${i + 1}`}
+                          className="h-full w-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGalleryPhoto(photo)}
+                          className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white hover:bg-black/80"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}

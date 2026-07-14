@@ -45,6 +45,10 @@ export const updateProfile = async (req, res, next) => {
       goal,
       activityLevel,
       dietPreference,
+      experience,
+      specialization,
+      bio,
+      ratePerMonth,
     } = req.body;
 
     if (gender && !USER_GENDERS.includes(gender)) {
@@ -76,6 +80,10 @@ export const updateProfile = async (req, res, next) => {
       goal,
       activityLevel,
       dietPreference,
+      experience,
+      specialization,
+      bio,
+      ratePerMonth,
     };
 
     Object.entries(updatableFields).forEach(([key, value]) => {
@@ -84,6 +92,84 @@ export const updateProfile = async (req, res, next) => {
       }
     });
 
+    await user.save();
+
+    res.status(200).json({ user: sanitizeUser(user) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Upload/replace the trainer's profile picture
+// @route   POST /api/users/profile/photo
+// @access  Private (trainer)
+export const uploadProfilePicture = async (req, res, next) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ message: "No image file uploaded" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.profilePicture = `/uploads/trainers/${req.file.filename}`;
+    await user.save();
+
+    res.status(200).json({ user: sanitizeUser(user) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Add photos to the trainer's gallery (max 5 total)
+// @route   POST /api/users/profile/gallery
+// @access  Private (trainer)
+export const uploadGalleryPhotos = async (req, res, next) => {
+  try {
+    if (!req.files || !req.files.length) {
+      return res.status(400).json({ message: "No image files uploaded" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const existing = user.gallery || [];
+    if (existing.length + req.files.length > 5) {
+      return res.status(400).json({
+        message: `Gallery allows at most 5 photos (you have ${existing.length})`,
+      });
+    }
+
+    const newPaths = req.files.map((f) => `/uploads/trainers/${f.filename}`);
+    user.gallery = [...existing, ...newPaths];
+    await user.save();
+
+    res.status(200).json({ user: sanitizeUser(user) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Remove a photo from the trainer's gallery
+// @route   DELETE /api/users/profile/gallery
+// @access  Private (trainer)
+export const deleteGalleryPhoto = async (req, res, next) => {
+  try {
+    const { photoUrl } = req.body;
+    if (!photoUrl) {
+      return res.status(400).json({ message: "photoUrl is required" });
+    }
+
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.gallery = (user.gallery || []).filter((p) => p !== photoUrl);
     await user.save();
 
     res.status(200).json({ user: sanitizeUser(user) });

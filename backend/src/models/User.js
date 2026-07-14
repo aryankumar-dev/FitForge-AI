@@ -61,7 +61,20 @@ const userSchema = new mongoose.Schema(
       enum: ["veg", "nonveg"],
     },
 
+    // ---- profile picture (any role) ----
+    profilePicture: {
+      type: String,
+    },
+
     // ---- role = trainer fields ----
+    gallery: {
+      type: [String],
+      default: undefined,
+      validate: {
+        validator: (arr) => !arr || arr.length <= 5,
+        message: "Gallery can have at most 5 photos",
+      },
+    },
     experience: {
       type: Number, // years
     },
